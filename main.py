@@ -14,7 +14,7 @@ COLORS = {
     2: (100, 200, 100),  # Verde (Hierba)
     3: (130, 130, 130)  # Gris (Roca)
 }
-
+game_over = False
 
 def generar_mapa():
     num_seeds = 220
@@ -39,13 +39,35 @@ class player:
         self.y = py
         self.inventory = {"Madera": 4, "Hierro": 0}
 
+    def morir(self):
+        global game_over
+        game_over= True
+
 class zombie:
     def __init__(self, x, y):
         self.x = x
         self.y = y
 
+    def mover(self,jugador):
+        if abs(self.x - jugador.x) < abs(self.y - jugador.y):
+            if self.y < jugador.y:
+                self.y += 1
+            else:
+                self.y -= 1
+        else:
+            if self.x < jugador.x:
+                self.x += 1
+            else:
+                self.x -= 1
+
+        if(self.x == jugador.x and self.y == jugador.y):
+            jugador.morir()
+
+
+
 
 def main():
+    global game_over
     pygame.init()
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
     pygame.display.set_caption("KNN Survival")
@@ -94,10 +116,10 @@ def main():
     enemigos = []
     contador_enemigos = 0
     tiempo_enemigo = random.randint(30, 60)
+    mov_enemigos = 0
 
     running = True
     while running:
-        cuadrante_actual = 0
 
         # Dibujar Mapa
         # Calcular en qué cuadrante está el jugador
@@ -204,61 +226,78 @@ def main():
             screen.blit(mensaje_render, (10, 35))
 
             construir = True
+        if mov_enemigos >= 5:
+            for enemigo in enemigos:
+                enemigo.mover(jugador)
+            mov_enemigos = 0
+        mov_enemigos += 1
 
-        pygame.display.flip()
-        clock.tick(15)
+
 
         # 1. CAPTURAR EVENTOS
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+        if not game_over:
+            keys = pygame.key.get_pressed()
+            if keys[pygame.K_LEFT]:
+                if jugador.x > 0 and (matriz[jugador.y][jugador.x - 1] != 0 or barco):
+                    jugador.x -= 1
+            elif keys[pygame.K_RIGHT]:
+                if jugador.x < COLS - 1 and (matriz[jugador.y][jugador.x + 1] != 0 or barco):
+                    jugador.x += 1
+            elif keys[pygame.K_UP]:
+                if jugador.y > 0 and (matriz[jugador.y - 1][jugador.x] != 0 or barco):
+                    jugador.y -= 1
+            elif keys[pygame.K_DOWN]:
+                if jugador.y < ROWS - 1 and (matriz[jugador.y + 1][jugador.x] != 0 or barco):
+                    jugador.y += 1
+            elif keys[pygame.K_q] and construir:
+                jugador.inventory["Madera"] -= 5
+                construir = False
+                barco = True
 
-        keys = pygame.key.get_pressed()
-        if keys[pygame.K_LEFT]:
-            if jugador.x > 0 and (matriz[jugador.y][jugador.x - 1] != 0 or barco):
-                jugador.x -= 1
-        elif keys[pygame.K_RIGHT]:
-            if jugador.x < COLS - 1 and (matriz[jugador.y][jugador.x + 1] != 0 or barco):
-                jugador.x += 1
-        elif keys[pygame.K_UP]:
-            if jugador.y > 0 and (matriz[jugador.y - 1][jugador.x] != 0 or barco):
-                jugador.y -= 1
-        elif keys[pygame.K_DOWN]:
-            if jugador.y < ROWS - 1 and (matriz[jugador.y + 1][jugador.x] != 0 or barco):
-                jugador.y += 1
-        elif keys[pygame.K_q] and construir:
-            jugador.inventory["Madera"] -= 5
-            construir = False
-            barco = True
+            for enemigo in enemigos:
+                if jugador.x == enemigo.x and jugador.y == enemigo.y:
+                    game_over= True
 
-        # Recolectar madera
-        for madera in maderas:
-            if jugador.x == madera['x'] and jugador.y == madera['y']:
-                maderas.remove(madera)
-                jugador.inventory["Madera"] += 1
-                break
+            # Recolectar madera
+            for madera in maderas:
+                if jugador.x == madera['x'] and jugador.y == madera['y']:
+                    maderas.remove(madera)
+                    jugador.inventory["Madera"] += 1
+                    break
 
-        if contador_enemigos > tiempo_enemigo:
-            if len(enemigos) < 10:
-                distancia_min = 3
-                distancia_max = 12
-                x1 = random.randrange(jugador.x + distancia_min, jugador.x + distancia_max)
-                x2 = random.randrange(jugador.x - distancia_max, jugador.x - distancia_min)
-                y1 = random.randrange(jugador.y + distancia_min, jugador.y + distancia_max)
-                y2 = random.randrange(jugador.y - distancia_max, jugador.y - distancia_min)
-                r = random.randrange(0, 2)
-                if r == 0:
-                    x = min(x1, COLS - 1)
-                    y = min(y1, ROWS - 1)
-                else:
-                    x = min(x2, COLS - 1)
-                    y = min(y2, ROWS - 1)
-                if not(x == jugador.x and y == jugador.y):
-                    enemigos.append(zombie(x,y))
-                contador_enemigos = 0
-                tiempo_enemigo = random.randint(30, 60)
+            if contador_enemigos > tiempo_enemigo:
+                if len(enemigos) < 10:
+                    distancia_min = 3
+                    distancia_max = 12
+                    x1 = random.randrange(jugador.x + distancia_min, jugador.x + distancia_max)
+                    x2 = random.randrange(jugador.x - distancia_max, jugador.x - distancia_min)
+                    y1 = random.randrange(jugador.y + distancia_min, jugador.y + distancia_max)
+                    y2 = random.randrange(jugador.y - distancia_max, jugador.y - distancia_min)
+                    r = random.randrange(0, 2)
+                    if r == 0:
+                        x = min(x1, COLS - 1)
+                        y = min(y1, ROWS - 1)
+                    else:
+                        x = min(x2, COLS - 1)
+                        y = min(y2, ROWS - 1)
+                    if not(x == jugador.x and y == jugador.y):
+                        enemigos.append(zombie(x,y))
+                    contador_enemigos = 0
+                    tiempo_enemigo = random.randint(30, 60)
 
-        contador_enemigos += 1
+            contador_enemigos += 1
+        else:
+            screen.fill((0, 0, 0))
+
+            texto_perder = font.render("¡GAME OVER!", True, (255, 0, 0))
+            rect_texto = texto_perder.get_rect(center=(WIDTH // 2, HEIGHT // 2))
+            screen.blit(texto_perder, rect_texto)
+
+        pygame.display.flip()
+        clock.tick(15)
 
 
 
