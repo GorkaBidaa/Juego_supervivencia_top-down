@@ -12,7 +12,8 @@ COLORS = {
     0: (50, 150, 200),  # Azul (Agua)
     1: (210, 190, 130),  # Amarillo (Arena)
     2: (100, 200, 100),  # Verde (Hierba)
-    3: (130, 130, 130)  # Gris (Roca)
+    3: (130, 130, 130),  # Gris (Roca)
+    4: (143, 151, 121)     #Verde caqui (pantano)
 }
 game_over = False
 
@@ -20,7 +21,7 @@ def generar_mapa():
     num_seeds = 220
     nodos = np.column_stack((np.random.randint(0, COLS, num_seeds),
                              np.random.randint(0, ROWS, num_seeds)))
-    bioma = np.random.randint(0, 4, num_seeds)
+    bioma = np.random.randint(0, 5, num_seeds)
 
     knn = KNeighborsClassifier(n_neighbors=3)
     knn.fit(nodos, bioma)
@@ -37,7 +38,7 @@ class player:
     def __init__(self, px, py):
         self.x = px
         self.y = py
-        self.inventory = {"Madera": 4, "Hierro": 0}
+        self.inventory = {"Madera": 4, "Hierro": 2}
 
     def morir(self):
         global game_over
@@ -79,8 +80,12 @@ def main():
     paso_COLS = COLS // 3  # 80
     paso_ROWS = ROWS // 3  # 50
 
-    construir = False
+    construir_barco = False
+    construir_espada = False
     barco = False
+    espada = False
+    espadazos = []
+    tiempo_espadazo = 0
 
     for i in range(3):
         for j in range(3):
@@ -102,15 +107,36 @@ def main():
 
     jugador = player(px, py)
 
+
     maderas = []
     cont_madera = 0
     cantidad_maderas = random.randint(7, 12)
     while cont_madera < cantidad_maderas:
+        repetida = False
         mx = random.randint(0, COLS - 1)
         my = random.randint(0, ROWS - 1)
-        if matriz[my][mx] == 1 or matriz[my][mx] == 2:
-            maderas.append({'x': mx, 'y': my})
-            cont_madera += 1
+        if matriz[my][mx] == 1 or matriz[my][mx] == 2 or matriz[my][mx] == 4:
+            for m in maderas:
+                if m.get('x') == mx and m.get('y') == my:
+                    repetida = True
+            if not repetida:
+                maderas.append({'x': mx, 'y': my})
+                cont_madera += 1
+
+    hierros = []
+    cont_hierro = 0
+    cantidad_hierro = random.randint(5, 9)
+    while cont_hierro < cantidad_hierro:
+        repetida = False
+        mx = random.randint(0, COLS - 1)
+        my = random.randint(0, ROWS - 1)
+        if matriz[my][mx] == 3:
+            for h in hierros:
+                if h.get('x') == mx and h.get('y') == my:
+                    repetida = True
+            if not repetida:
+                hierros.append({'x': mx, 'y': my})
+                cont_hierro += 1
 
 
     enemigos = []
@@ -163,6 +189,20 @@ def main():
 
                 pygame.draw.rect(screen, (70, 35, 10), rect_tronco, 1)
 
+        for hierro in hierros:
+            cuad_x = hierro['x'] // paso_COLS
+            cuad_y = hierro['y'] // paso_ROWS
+            cuadrante_hierro = cuad_y * 3 + cuad_x
+
+            if cuadrante_hierro == cuadrante_actual:
+                tile_x = (hierro['x'] % paso_COLS) * TILE_SIZE
+                tile_y = (hierro['y'] % paso_ROWS) * TILE_SIZE
+
+                rect_hierro = (tile_x + 3, tile_y + 3, 9, 9)
+
+                pygame.draw.rect(screen, (180, 180, 180), rect_hierro)  # Gris claro (centro)
+                pygame.draw.rect(screen, (100, 100, 100), rect_hierro, 1)  # Gris oscuro (borde)
+
         # Dibujar enemigos
         for enemigo in enemigos:
             cuad_x = enemigo.x // paso_COLS
@@ -193,6 +233,20 @@ def main():
 
         pygame.draw.circle(screen, (255, 255, 255), (dibujo_x, dibujo_y), 8)
 
+        #Dibujar Espadazos
+        if tiempo_espadazo > 0:
+            for ex, ey in espadazos:
+                cuad_x = ex // paso_COLS
+                cuad_y = ey // paso_ROWS
+                cuadrante_espadazo = cuad_y * 3 + cuad_x
+
+                if cuadrante_espadazo == cuadrante_actual:
+                    tile_local_x = (ex % paso_COLS) * TILE_SIZE
+                    tile_local_y = (ey % paso_ROWS) * TILE_SIZE
+
+                    rect_ataque = (tile_local_x, tile_local_y, TILE_SIZE, TILE_SIZE)
+                    pygame.draw.rect(screen, (150, 200, 255), rect_ataque, 2)
+
         # Interfaz de Inventario
         inv_text = font.render(f"Madera: {jugador.inventory['Madera']} | Hierro: {jugador.inventory['Hierro']}", True,(255, 255, 255))
         screen.blit(inv_text, (10, 10))
@@ -217,15 +271,24 @@ def main():
                 pygame.draw.rect(minimapa, (255, 255, 255, 150), rect, 1)
                 idx += 1
 
-        # Dibujamos el minimapa en la pantalla principal (arriba a la derecha)
         screen.blit(minimapa, (WIDTH - (tam_cuadrito * 3) - margen_derecho, margen_superior))
 
-        if jugador.inventory["Madera"] >= 5:
-            texto_mensaje = "Pulsa la letra 'Q' para construir un barco"  # Puedes cambiar esto por una variable
-            mensaje_render = font.render(texto_mensaje, True, (200, 200, 200))  # Gris clarito
-            screen.blit(mensaje_render, (10, 35))
+        y_mensaje = 35
 
-            construir = True
+        if jugador.inventory["Madera"] >= 5:
+            texto_mensaje = "Pulsa la letra 'Q' para construir_barco un barco"
+            mensaje_render = font.render(texto_mensaje, True, (200, 200, 200))
+            screen.blit(mensaje_render, (10, y_mensaje))
+            construir_barco = True
+
+            y_mensaje += 25
+
+        if jugador.inventory["Hierro"] >= 3:
+            texto_mensaje = "Pulsa la letra 'E' para construir_barco una Espada"
+            mensaje_render = font.render(texto_mensaje, True, (200, 200, 200))
+            screen.blit(mensaje_render, (10, y_mensaje))
+            construir_espada = True
+
         if mov_enemigos >= 5:
             for enemigo in enemigos:
                 enemigo.mover(jugador)
@@ -252,10 +315,28 @@ def main():
             elif keys[pygame.K_DOWN]:
                 if jugador.y < ROWS - 1 and (matriz[jugador.y + 1][jugador.x] != 0 or barco):
                     jugador.y += 1
-            elif keys[pygame.K_q] and construir:
+            elif keys[pygame.K_q] and construir_barco:
                 jugador.inventory["Madera"] -= 5
-                construir = False
+                construir_barco = False
                 barco = True
+            elif keys[pygame.K_e] and construir_espada:
+                jugador.inventory["Hierro"] -= 3
+                construir_espada = False
+                espada = True
+            elif keys[pygame.K_SPACE] and espada and tiempo_espadazo == 0:
+                ex = jugador.x
+                ey = jugador.y
+                espadazos.clear()
+                for dx in range(-2, 3):
+                    for dy in range(-2, 3):
+                        if abs(dx) != 2 or abs(dy) != 2:
+                            nx = ex + dx
+                            ny = ey + dy
+                            if 0 <= nx < COLS and 0 <= ny < ROWS:
+                                espadazos.append([nx, ny])
+                tiempo_espadazo = 7
+
+
 
             for enemigo in enemigos:
                 if jugador.x == enemigo.x and jugador.y == enemigo.y:
@@ -268,33 +349,54 @@ def main():
                     jugador.inventory["Madera"] += 1
                     break
 
+            # Recolectar Hierro
+            for hierro in hierros:
+                if jugador.x == hierro['x'] and jugador.y == hierro['y']:
+                    hierros.remove(hierro)
+                    jugador.inventory["Hierro"] += 1
+                    break
+
             if contador_enemigos > tiempo_enemigo:
-                if len(enemigos) < 10:
-                    distancia_min = 3
-                    distancia_max = 12
-                    x1 = random.randrange(jugador.x + distancia_min, jugador.x + distancia_max)
-                    x2 = random.randrange(jugador.x - distancia_max, jugador.x - distancia_min)
-                    y1 = random.randrange(jugador.y + distancia_min, jugador.y + distancia_max)
-                    y2 = random.randrange(jugador.y - distancia_max, jugador.y - distancia_min)
-                    r = random.randrange(0, 2)
-                    if r == 0:
-                        x = min(x1, COLS - 1)
-                        y = min(y1, ROWS - 1)
-                    else:
-                        x = min(x2, COLS - 1)
-                        y = min(y2, ROWS - 1)
-                    if not(x == jugador.x and y == jugador.y):
-                        enemigos.append(zombie(x,y))
-                    contador_enemigos = 0
-                    tiempo_enemigo = random.randint(30, 60)
+                if len(enemigos) >= 10:
+                    enemigos.pop(0)
+                distancia_min = 3
+                distancia_max = 12
+                x1 = random.randrange(jugador.x + distancia_min, jugador.x + distancia_max)
+                x2 = random.randrange(jugador.x - distancia_max, jugador.x - distancia_min)
+                y1 = random.randrange(jugador.y + distancia_min, jugador.y + distancia_max)
+                y2 = random.randrange(jugador.y - distancia_max, jugador.y - distancia_min)
+                r = random.randrange(0, 2)
+                if r == 0:
+                    x = min(x1, COLS - 1)
+                    y = min(y1, ROWS - 1)
+                else:
+                    x = min(x2, COLS - 1)
+                    y = min(y2, ROWS - 1)
+                if not(x == jugador.x and y == jugador.y):
+                    enemigos.append(zombie(x,y))
+                contador_enemigos = 0
+                tiempo_enemigo = random.randint(30, 60)
 
             contador_enemigos += 1
+
+            if tiempo_espadazo > 0:
+                for espadazo in espadazos:
+                    for enemigo in enemigos[:]:
+                        if enemigo.x == espadazo[0] and enemigo.y == espadazo[1]:
+                            enemigos.remove(enemigo)
+
+                tiempo_espadazo -= 1
+
+                if tiempo_espadazo == 0:
+                    espadazos.clear()
         else:
             screen.fill((0, 0, 0))
 
             texto_perder = font.render("¡GAME OVER!", True, (255, 0, 0))
             rect_texto = texto_perder.get_rect(center=(WIDTH // 2, HEIGHT // 2))
             screen.blit(texto_perder, rect_texto)
+
+
 
         pygame.display.flip()
         clock.tick(15)
